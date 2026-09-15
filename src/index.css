@@ -1,0 +1,16 @@
+@import "tailwindcss";
+
+@theme {
+  --color-p1: #ef4444;
+  --color-p2: #f97316;
+  --color-p3: #3b82f6;
+  --color-p4: #9ca3af;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  @apply bg-zinc-50 text-zinc-900 antialiased;
+}
