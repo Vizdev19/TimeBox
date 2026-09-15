@@ -118,3 +118,29 @@ describe('replanFromNow edge cases', () => {
     expect(fmt(r.blocks)).toEqual(['b 09:00-09:30'])
   })
 })
+
+describe('replanFromNow with conflicting fixed events', () => {
+  it('releases a locked block that a fixed event now overlaps', () => {
+    const existing = [block({ taskId: 'a', start: '14:00', end: '15:00', locked: true })]
+    const r = replanFromNow({
+      ...base,
+      nowMin: 9 * 60,
+      fixedEvents: [fixed('m', '14:30', '15:00')],
+      existingBlocks: existing,
+      tasks: [task({ id: 'a', estimateMin: 60 })],
+    })
+    expect(fmt(r.blocks)).toEqual(['a 09:00-10:00', 'm 14:30-15:00'])
+  })
+
+  it('keeps a locked block that does not collide', () => {
+    const existing = [block({ taskId: 'a', start: '14:00', end: '15:00', locked: true })]
+    const r = replanFromNow({
+      ...base,
+      nowMin: 9 * 60,
+      fixedEvents: [fixed('m', '15:00', '15:30')],
+      existingBlocks: existing,
+      tasks: [task({ id: 'a', estimateMin: 60 })],
+    })
+    expect(fmt(r.blocks)).toEqual(['a 14:00-15:00 L', 'm 15:00-15:30'])
+  })
+})

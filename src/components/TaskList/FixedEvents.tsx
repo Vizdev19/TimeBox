@@ -10,9 +10,20 @@ export function FixedEvents() {
   const [end, setEnd] = useState('13:00')
   const sorted = [...fixedEvents].sort((a, b) => toMin(a.start) - toMin(b.start))
 
+  const [error, setError] = useState<string | null>(null)
+
+  const validate = (): string | null => {
+    if (!title.trim()) return 'Give the event a name.'
+    if (!/^\d{2}:\d{2}$/.test(start) || !/^\d{2}:\d{2}$/.test(end)) return 'Pick both a start and an end time.'
+    if (toMin(end) <= toMin(start)) return 'End time must be after the start time.'
+    return null
+  }
+
   const submit = async (e: FormEvent) => {
     e.preventDefault()
-    if (!title.trim() || toMin(end) <= toMin(start)) return
+    const problem = validate()
+    setError(problem)
+    if (problem) return
     await addFixedEvent({ title: title.trim(), date: today, start, end })
     setTitle('')
   }
@@ -40,11 +51,20 @@ export function FixedEvents() {
         </ul>
       )}
       <form onSubmit={submit} className="flex flex-wrap items-center gap-2">
-        <Input className="min-w-[8rem] flex-1" placeholder="Meeting, lunch…" value={title} onChange={(e) => setTitle(e.target.value)} />
-        <Input type="time" value={start} onChange={(e) => setStart(e.target.value)} />
-        <Input type="time" value={end} onChange={(e) => setEnd(e.target.value)} />
+        <Input
+          className="min-w-[8rem] flex-1"
+          placeholder="Meeting, lunch…"
+          value={title}
+          onChange={(e) => {
+            setTitle(e.target.value)
+            setError(null)
+          }}
+        />
+        <Input type="time" value={start} onChange={(e) => setStart(e.target.value)} aria-label="Start time" />
+        <Input type="time" value={end} onChange={(e) => setEnd(e.target.value)} aria-label="End time" />
         <Button type="submit">Add</Button>
       </form>
+      {error && <p className="text-xs text-red-600">{error}</p>}
     </section>
   )
 }

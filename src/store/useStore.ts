@@ -190,7 +190,10 @@ export const useStore = create<State>((set, get) => {
     addFixedEvent: async (e) => {
       const ev: FixedEvent = { id: uuid(), source: 'manual', ...e }
       await repo.putFixedEvent(ev)
-      if (ev.date === get().today) set((s) => ({ fixedEvents: [...s.fixedEvents, ev] }))
+      if (ev.date === get().today) {
+        set((s) => ({ fixedEvents: [...s.fixedEvents, ev] }))
+        await replan()
+      }
     },
 
     deleteFixedEvent: async (id) => {
@@ -199,6 +202,7 @@ export const useStore = create<State>((set, get) => {
         fixedEvents: s.fixedEvents.filter((e) => e.id !== id),
         blocks: s.blocks.filter((b) => b.fixedEventId !== id),
       }))
+      await replan()
     },
 
     updateSettings: async (patch) => {
