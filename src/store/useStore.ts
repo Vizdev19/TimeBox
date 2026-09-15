@@ -1,10 +1,13 @@
 import { create } from 'zustand'
 import { repo } from '../db/repo'
 import { replanFromNow } from '../planner/replan'
+import { checkpoint, remainingFor, unfoldedBlocks } from '../planner/budget'
+import { db } from '../db/dexie'
 import type { Unscheduled } from '../planner/plan'
 import type { Block, FixedEvent, Priority, SessionLog, Settings, Task } from '../types'
 import { DEFAULT_SETTINGS } from '../types'
 import { dateToMin, toHHMM, toMin, todayISO } from '../utils/time'
+import { addDays, format } from 'date-fns'
 
 export type View = 'plan' | 'focus' | 'review'
 
@@ -35,7 +38,14 @@ interface State {
   addTask: (t: NewTask) => Promise<void>
   updateTask: (id: string, patch: Partial<Task>) => Promise<void>
   deleteTask: (id: string) => Promise<void>
-  requeueTask: (id: string) => Promise<void>
+  /** Mark done, from the list or Focus. Closes a running block if there is one. */
+  completeTask: (id: string) => Promise<void>
+  /** Record a partial-completion checkpoint and continue today or on a later date. */
+  markPartial: (id: string, remainingMin: number, continueOn: string) => Promise<void>
+  /** Push the task to another day. */
+  moveTask: (id: string, date: string) => Promise<void>
+  /** deferred/done -> todo, back in today's queue. */
+  bringBack: (id: string) => Promise<void>
 
   addFixedEvent: (e: Omit<FixedEvent, 'id' | 'source'>) => Promise<void>
   deleteFixedEvent: (id: string) => Promise<void>
@@ -49,7 +59,6 @@ interface State {
   startBlock: (id: string) => Promise<void>
   doneBlock: (id: string) => Promise<void>
   pauseBlock: (id: string) => Promise<void>
-  skipBlock: (id: string) => Promise<void>
   extendBlock: (id: string, minutes: number) => Promise<void>
 }
 
@@ -135,15 +144,34 @@ export const useStore = create<State>((set, get) => {
         repo.allLogs(),
         repo.getSettings(),
       ])
-      // Day rollover: tasks skipped on an earlier day go back in the queue.
+      const now = new Date()
       for (const t of tasks) {
-        if (t.status === 'skipped' && t.skippedOn && t.skippedOn < today) {
-          t.status = 'todo'
-          delete t.skippedOn
-          await repo.putTask(t)
+        let changed = false
+        // Migration from the old 'skipped' status.
+        const legacy = t as Omit<Task, 'status'> & { skippedOn?: string; status: string }
+        if (legacy.status === 'skipped') {
+          t.status = 'deferred'
+          t.scheduledFor = legacy.skippedOn ? format(addDays(new Date(legacy.skippedOn), 1), 'yyyy-MM-dd') : today
+          delete legacy.skippedOn
+          changed = true
         }
+        // Day rollover: deferred tasks whose day has come rejoin the queue.
+        if (t.status === 'deferred' && t.scheduledFor && t.scheduledFor <= today) {
+          t.status = 'todo'
+          delete t.scheduledFor
+          changed = true
+        }
+        // Fold work done on earlier days into the remaining-time checkpoint.
+        if (t.status !== 'done') {
+          const past = unfoldedBlocks(t, await db.blocks.where('taskId').equals(t.id).toArray()).filter((b) => b.date < today)
+          if (past.length > 0) {
+            Object.assign(t, checkpoint(t, past, now))
+            changed = true
+          }
+        }
+        if (changed) await repo.putTask(t)
       }
-      set({ loaded: true, today, tasks, fixedEvents, blocks, logs, settings, now: new Date() })
+      set({ loaded: true, today, tasks, fixedEvents, blocks, logs, settings, now })
     },
 
     tick: () => {
@@ -178,13 +206,96 @@ export const useStore = create<State>((set, get) => {
       }))
     },
 
-    requeueTask: async (id) => {
+    completeTask: async (id) => {
+      const s = get()
+      const task = s.tasks.find((x) => x.id === id)
+      if (!task) return
+      const nowMin = dateToMin(s.now)
+      let blocks = s.blocks
+      const running = task.status === 'in_progress' ? currentBlock(s.blocks, s.tasks, s.now) : undefined
+      if (running && running.taskId === id) {
+        const overran = nowMin > toMin(running.end)
+        const closed = await closeBlock(running, overran ? 'overran' : 'completed', nowMin)
+        blocks = blocks.map((b) => (b.id === running.id ? closed : b))
+      } else {
+        // Completed without a timer: log the planned slot (if any) so Review lists it.
+        const planned = s.blocks.find((b) => b.taskId === id)
+        if (planned && !s.logs.some((l) => l.id === planned.id)) {
+          await saveLog({
+            id: planned.id,
+            taskId: id,
+            date: planned.date,
+            plannedStart: planned.start,
+            plannedEnd: planned.end,
+            outcome: 'completed',
+          })
+        }
+      }
+      await saveTask({ ...task, status: 'done', completedAt: s.now.toISOString() })
+      await replan(blocks)
+    },
+
+    markPartial: async (id, remainingMin, continueOn) => {
+      const s = get()
+      const task = s.tasks.find((x) => x.id === id)
+      if (!task) return
+      const nowMin = dateToMin(s.now)
+      let blocks = s.blocks
+      const running = task.status === 'in_progress' ? currentBlock(s.blocks, s.tasks, s.now) : undefined
+      if (running && running.taskId === id) {
+        const closed = await closeBlock(running, 'partial', nowMin)
+        blocks = blocks.map((b) => (b.id === running.id ? closed : b))
+      }
+      // The user is re-deciding this task: release any pinned future blocks.
+      blocks = blocks.map((b) => (b.taskId === id && b.locked && toMin(b.end) > nowMin ? { ...b, locked: false } : b))
+      const next: Task = {
+        ...task,
+        remainingMin: Math.max(0, Math.round(remainingMin)),
+        remainingAsOf: s.now.toISOString(),
+        status: continueOn <= s.today ? 'todo' : 'deferred',
+      }
+      if (next.status === 'deferred') next.scheduledFor = continueOn
+      else delete next.scheduledFor
+      await saveTask(next)
+      await replan(blocks)
+    },
+
+    moveTask: async (id, date) => {
+      const s = get()
+      const task = s.tasks.find((x) => x.id === id)
+      if (!task) return
+      const nowMin = dateToMin(s.now)
+      let blocks = s.blocks
+      const running = task.status === 'in_progress' ? currentBlock(s.blocks, s.tasks, s.now) : undefined
+      if (running && running.taskId === id) {
+        const closed = await closeBlock(running, 'moved', nowMin)
+        blocks = blocks.map((b) => (b.id === running.id ? closed : b))
+      } else {
+        const planned = s.blocks.find((b) => b.taskId === id && toMin(b.end) > nowMin)
+        if (planned && !s.logs.some((l) => l.id === planned.id)) {
+          await saveLog({
+            id: planned.id,
+            taskId: id,
+            date: planned.date,
+            plannedStart: planned.start,
+            plannedEnd: planned.end,
+            outcome: 'moved',
+          })
+        }
+      }
+      blocks = blocks.filter((b) => !(b.taskId === id && toMin(b.start) >= nowMin))
+      await saveTask({ ...task, status: 'deferred', scheduledFor: date })
+      await replan(blocks)
+    },
+
+    bringBack: async (id) => {
       const t = get().tasks.find((x) => x.id === id)
       if (!t) return
-      const next = { ...t, status: 'todo' as const }
-      delete next.skippedOn
+      const next: Task = { ...t, status: 'todo' }
+      delete next.scheduledFor
       delete next.completedAt
       await saveTask(next)
+      await replan()
     },
 
     addFixedEvent: async (e) => {
@@ -276,30 +387,6 @@ export const useStore = create<State>((set, get) => {
       await replan(get().blocks.map((b) => (b.id === id ? closed : b)))
     },
 
-    skipBlock: async (id) => {
-      const { block, task } = findBlock(id)
-      const s = get()
-      const nowMin = dateToMin(s.now)
-      const started = task.status === 'in_progress'
-      let blocks: Block[]
-      if (started) {
-        const closed = await closeBlock(block, 'skipped', nowMin)
-        blocks = s.blocks.map((b) => (b.id === id ? closed : b))
-      } else {
-        await saveLog({
-          id,
-          taskId: task.id,
-          date: block.date,
-          plannedStart: block.start,
-          plannedEnd: block.end,
-          outcome: 'skipped',
-        })
-        blocks = s.blocks.filter((b) => b.id !== id)
-      }
-      await saveTask({ ...task, status: 'skipped', skippedOn: s.today })
-      await replan(blocks)
-    },
-
     extendBlock: async (id, minutes) => {
       const { task: t0 } = findBlock(id)
       if (t0.status !== 'in_progress') await get().startBlock(id)
@@ -319,16 +406,23 @@ export const useStore = create<State>((set, get) => {
       const end = nextFixed ?? wantEnd
       const blocks = s.blocks.map((b) => (b.id === id ? { ...b, end: toHHMM(end) } : b))
 
-      let extraMin = (task.extraMin ?? 0) + minutes
+      // A checkpointed task grows its remaining figure; otherwise the extension is logged as extra.
+      let added = minutes
       if (nextFixed !== undefined) {
         // Make sure the continuation is at least one schedulable piece.
-        const covered = blocks
-          .filter((b) => b.taskId === task.id && (toMin(b.start) <= nowMin || b.locked))
-          .reduce((n, b) => n + Math.max(0, toMin(b.end) - toMin(b.start)), 0)
-        const remaining = task.estimateMin + extraMin - covered
-        if (remaining < s.settings.minBlockMin) extraMin += s.settings.minBlockMin - remaining
+        const kept = blocks.filter((b) => toMin(b.start) <= nowMin || b.locked)
+        const bumped: Task =
+          task.remainingMin !== undefined
+            ? { ...task, remainingMin: task.remainingMin + added }
+            : { ...task, extraMin: (task.extraMin ?? 0) + added }
+        const remaining = remainingFor(bumped, kept, s.today)
+        if (remaining < s.settings.minBlockMin) added += s.settings.minBlockMin - remaining
       }
-      await saveTask({ ...task, extraMin })
+      const next: Task =
+        task.remainingMin !== undefined
+          ? { ...task, remainingMin: task.remainingMin + added }
+          : { ...task, extraMin: (task.extraMin ?? 0) + added }
+      await saveTask(next)
       await replan(blocks)
     },
   }

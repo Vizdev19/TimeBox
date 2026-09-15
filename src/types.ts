@@ -1,6 +1,6 @@
 export type Priority = 1 | 2 | 3 | 4 // 1 = highest
 
-export type TaskStatus = 'todo' | 'in_progress' | 'done' | 'skipped'
+export type TaskStatus = 'todo' | 'in_progress' | 'done' | 'deferred'
 
 export interface Task {
   id: string
@@ -14,8 +14,12 @@ export interface Task {
   notes?: string
   createdAt: string // ISO datetime
   completedAt?: string
-  /** Date the task was skipped; it is re-queued automatically on a later day. */
-  skippedOn?: string
+  /** Set by "Partially completed": minutes still needed as of `remainingAsOf`. */
+  remainingMin?: number
+  /** ISO datetime. Task blocks that started before this are already folded into remainingMin. */
+  remainingAsOf?: string
+  /** For status 'deferred': the day the task rejoins the queue. */
+  scheduledFor?: string // YYYY-MM-DD
 }
 
 /** Meetings, lunch, etc. The planner schedules around these. */
@@ -54,7 +58,7 @@ export interface Settings {
   allowSplitting: boolean
 }
 
-export type SessionOutcome = 'completed' | 'overran' | 'skipped' | 'partial'
+export type SessionOutcome = 'completed' | 'overran' | 'skipped' | 'partial' | 'moved' // 'skipped' only in old logs
 
 /** Planned vs. actual for one task block — feeds the Review view. */
 export interface SessionLog {

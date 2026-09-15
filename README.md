@@ -15,7 +15,9 @@ npm run build      # static site in dist/
 
 **Plan** — add tasks and today's fixed events, hit *Plan my day*. The planner (`src/planner/plan.ts`, pure and unit-tested) ranks tasks (in progress → overdue/due today → priority → due date → shortest), then first-fits them into the free gaps between fixed events. A task that fits nowhere whole is split across gaps (never into pieces shorter than *Smallest block*), and a break is inserted after every *Break every* minutes of continuous work. Drag a block on the timeline to move it, drag its bottom edge to resize; that locks it (🔒) so later replans schedule around it. *Unlock all* releases them.
 
-**Focus** — the current block, a countdown, and the next three things. `Space` starts, `Enter` marks done. *+15 min* extends the block (clipped at the next fixed event; the overflow is scheduled as a continuation after it). *Pause* stops for now and reschedules the remainder. *Skip today* drops the task until tomorrow, when it's re-queued automatically. Every action re-plans the rest of the day from the current minute.
+**Focus** — the current block, a countdown, and the next three things. `Space` starts, `Enter` marks done. *+15 min* extends the block (clipped at the next fixed event; the overflow is scheduled as a continuation after it). *Pause* stops for now and reschedules the remainder. Every action re-plans the rest of the day from the current minute.
+
+**Task status** — each task row (and the Focus view) offers *Completed*, *Partially completed…* and *Moved to another date…*. Partial asks how many minutes are left and when to continue; that remaining figure is what gets planned next, while the original estimate stays intact for Review. Moved tasks sit in a *Later* section and rejoin the queue automatically on their date. Work paused on an earlier day is folded into the remaining figure when the app opens.
 
 **Review** — per day, planned vs. actual for each session, and a rolling estimate-accuracy factor (actual ÷ planned over the last 14 days) once there are three or more finished sessions.
 

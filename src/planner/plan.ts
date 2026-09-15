@@ -1,6 +1,7 @@
 import type { Block, FixedEvent, Settings, Task } from '../types'
-import { durationMin, subtractRanges, toHHMM, toMin, type Range } from '../utils/time'
+import { subtractRanges, toHHMM, toMin, type Range } from '../utils/time'
 import { rankTasks } from './rank'
+import { remainingFor } from './budget'
 
 export interface PlanInput {
   date: string
@@ -41,7 +42,7 @@ const defaultIdGen = () => crypto.randomUUID()
  * 1. Free window = [max(workStart, fromMin), workEnd] minus fixed events
  *    minus keepBlocks.
  * 2. Tasks are ranked (see rankTasks). Each task's remaining time is its
- *    estimate (+ any extraMin) minus whatever keepBlocks already cover for it.
+ *    budget (see budget.ts) minus whatever keepBlocks already cover for it.
  * 3. First-fit: a task goes whole into the first gap it fits. If it fits
  *    nowhere and splitting is on, it is spread across gaps in pieces no
  *    smaller than minBlockMin. Otherwise it is reported as unscheduled.
@@ -83,14 +84,6 @@ export function planDay(input: PlanInput): PlanResult {
   const gaps: Gap[] = subtractRanges([{ start: from, end: workEnd }], [...fixedRanges, ...keepRanges])
     .map((g) => ({ ...g, cursor: g.start, sinceBreak: 0 }))
 
-  // Remaining minutes per task after subtracting kept task blocks.
-  const covered = new Map<string, number>()
-  for (const b of keep) {
-    if (b.kind === 'task' && b.taskId) {
-      covered.set(b.taskId, (covered.get(b.taskId) ?? 0) + durationMin(b.start, b.end))
-    }
-  }
-
   const unscheduled: Unscheduled[] = []
   const minPiece = Math.max(1, settings.minBlockMin)
 
@@ -130,7 +123,7 @@ export function planDay(input: PlanInput): PlanResult {
   }
 
   for (const task of rankTasks(tasks, date)) {
-    let remaining = task.estimateMin + (task.extraMin ?? 0) - (covered.get(task.id) ?? 0)
+    let remaining = remainingFor(task, keep, date)
     if (remaining <= 0) continue
 
     // First-fit whole.

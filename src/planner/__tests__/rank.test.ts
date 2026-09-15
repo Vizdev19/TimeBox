@@ -7,7 +7,7 @@ describe('rankTasks', () => {
     const r = rankTasks(
       [
         task({ id: 'a', estimateMin: 30, status: 'done' }),
-        task({ id: 'b', estimateMin: 30, status: 'skipped' }),
+        task({ id: 'b', estimateMin: 30, status: 'deferred' }),
         task({ id: 'c', estimateMin: 30 }),
       ],
       DAY,

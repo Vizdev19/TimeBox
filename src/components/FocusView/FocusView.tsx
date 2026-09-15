@@ -2,11 +2,12 @@ import { useEffect, useState } from 'react'
 import { currentBlock, nextBlocks, taskById, useStore } from '../../store/useStore'
 import { atTime, formatCountdown, formatMinutes, toMin } from '../../utils/time'
 import { Button, PriorityDot } from '../ui'
+import { StatusDialog, type StatusDialogMode } from '../TaskList/StatusDialog'
 
 export function FocusView() {
-  const { blocks, tasks, fixedEvents, now, today, startBlock, doneBlock, pauseBlock, skipBlock, extendBlock, setView } =
-    useStore()
+  const { blocks, tasks, fixedEvents, now, today, startBlock, doneBlock, pauseBlock, extendBlock, setView } = useStore()
   const [busy, setBusy] = useState(false)
+  const [dialog, setDialog] = useState<StatusDialogMode | null>(null)
   const block = currentBlock(blocks, tasks, now)
   const task = taskById(tasks, block?.taskId)
   const upcoming = nextBlocks(blocks, block, now)
@@ -116,11 +117,15 @@ export function FocusView() {
                 Pause
               </Button>
             )}
-            <Button variant="ghost" disabled={busy} onClick={() => run(() => skipBlock(block.id))} title="Drop this task for today">
-              Skip today
+            <Button disabled={busy} onClick={() => setDialog('partial')} title="Record what's left and when to continue">
+              Partial…
+            </Button>
+            <Button variant="ghost" disabled={busy} onClick={() => setDialog('move')} title="Push this task to another day">
+              Move…
             </Button>
           </div>
         )}
+        {dialog && task && <StatusDialog task={task} mode={dialog} onClose={() => setDialog(null)} />}
         {task?.notes && <p className="mt-6 whitespace-pre-wrap text-left text-sm text-zinc-600">{task.notes}</p>}
       </div>
 

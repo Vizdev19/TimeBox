@@ -1,5 +1,6 @@
 import { useStore } from '../../store/useStore'
 import { rankTasks } from '../../planner/rank'
+import { budgetOf } from '../../planner/budget'
 import { TaskForm } from './TaskForm'
 import { TaskRow } from './TaskRow'
 import { FixedEvents } from './FixedEvents'
@@ -9,9 +10,9 @@ export function TaskList() {
   const { tasks, unscheduled, today } = useStore()
   const open = rankTasks(tasks, today)
   const done = tasks.filter((t) => t.status === 'done')
-  const skipped = tasks.filter((t) => t.status === 'skipped')
+  const later = tasks.filter((t) => t.status === 'deferred').sort((a, b) => (a.scheduledFor ?? '').localeCompare(b.scheduledFor ?? ''))
   const unsched = new Map(unscheduled.map((u) => [u.taskId, u.remainingMin]))
-  const totalOpen = open.reduce((n, t) => n + t.estimateMin, 0)
+  const totalOpen = open.reduce((n, t) => n + budgetOf(t), 0)
 
   return (
     <div className="space-y-5">
@@ -41,11 +42,11 @@ export function TaskList() {
 
       <FixedEvents />
 
-      {skipped.length > 0 && (
+      {later.length > 0 && (
         <section className="space-y-1">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Skipped today</h3>
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Later</h3>
           <ul className="space-y-0.5">
-            {skipped.map((t) => (
+            {later.map((t) => (
               <TaskRow key={t.id} task={t} />
             ))}
           </ul>

@@ -18,6 +18,7 @@ const outcomeStyle: Record<SessionLog['outcome'], string> = {
   overran: 'bg-red-100 text-red-700',
   partial: 'bg-amber-100 text-amber-700',
   skipped: 'bg-zinc-200 text-zinc-600',
+  moved: 'bg-zinc-200 text-zinc-600',
 }
 
 export function Review() {
@@ -36,10 +37,10 @@ export function Review() {
       acc.planned += plannedMin(l)
       if (a !== undefined) acc.actual += a
       if (l.outcome === 'completed' || l.outcome === 'overran') acc.done++
-      if (l.outcome === 'skipped') acc.skipped++
+      if (l.outcome === 'skipped' || l.outcome === 'moved') acc.moved++
       return acc
     },
-    { planned: 0, actual: 0, done: 0, skipped: 0 },
+    { planned: 0, actual: 0, done: 0, moved: 0 },
   )
 
   // Estimate accuracy over the last 14 days of finished work.
@@ -106,7 +107,7 @@ export function Review() {
         <Stat label="Planned" value={formatMinutes(totals.planned)} />
         <Stat label="Actual" value={formatMinutes(totals.actual)} />
         <Stat label="Finished" value={String(totals.done)} />
-        <Stat label="Skipped" value={String(totals.skipped)} />
+        <Stat label="Moved" value={String(totals.moved)} />
       </div>
 
       <div className="overflow-x-auto rounded-lg border border-zinc-200 bg-white">

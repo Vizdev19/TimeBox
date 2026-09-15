@@ -26,15 +26,15 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
           </label>
           <label className="flex flex-col gap-1 text-sm">
             Break every (min)
-            <Input type="number" min={0} step={5} value={settings.breakEveryMin} onChange={(e) => updateSettings({ breakEveryMin: num(e.target.value) })} />
+            <Input type="number" min={0} step="any" value={settings.breakEveryMin} onChange={(e) => updateSettings({ breakEveryMin: num(e.target.value) })} />
           </label>
           <label className="flex flex-col gap-1 text-sm">
             Break length (min)
-            <Input type="number" min={0} step={5} value={settings.breakLengthMin} onChange={(e) => updateSettings({ breakLengthMin: num(e.target.value) })} />
+            <Input type="number" min={0} step="any" value={settings.breakLengthMin} onChange={(e) => updateSettings({ breakLengthMin: num(e.target.value) })} />
           </label>
           <label className="flex flex-col gap-1 text-sm">
             Smallest block (min)
-            <Input type="number" min={5} step={5} value={settings.minBlockMin} onChange={(e) => updateSettings({ minBlockMin: Math.max(5, num(e.target.value)) })} />
+            <Input type="number" min={5} step="any" value={settings.minBlockMin} onChange={(e) => updateSettings({ minBlockMin: Math.max(5, num(e.target.value)) })} />
           </label>
           <label className="flex items-center gap-2 self-end text-sm">
             <input type="checkbox" checked={settings.allowSplitting} onChange={(e) => updateSettings({ allowSplitting: e.target.checked })} />

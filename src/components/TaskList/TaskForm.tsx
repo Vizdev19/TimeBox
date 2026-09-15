@@ -36,7 +36,7 @@ export function TaskForm({ autoFocus = false }: { autoFocus?: boolean }) {
       </label>
       <label className="flex w-20 flex-col gap-1">
         <span className="text-xs text-zinc-500">Min</span>
-        <Input type="number" min={5} step={5} value={estimate} onChange={(e) => setEstimate(e.target.value)} />
+        <Input type="number" min={5} step="any" value={estimate} onChange={(e) => setEstimate(e.target.value)} />
       </label>
       <label className="flex flex-col gap-1">
         <span className="text-xs text-zinc-500">Priority</span>
