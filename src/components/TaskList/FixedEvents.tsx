@@ -4,7 +4,8 @@ import { toMin } from '../../utils/time'
 import { Button, Input } from '../ui'
 
 export function FixedEvents() {
-  const { fixedEvents, addFixedEvent, deleteFixedEvent, today } = useStore()
+  const { fixedEvents, addFixedEvent, deleteFixedEvent, date, today } = useStore()
+  const readOnly = date < today
   const [title, setTitle] = useState('')
   const [start, setStart] = useState('12:00')
   const [end, setEnd] = useState('13:00')
@@ -24,13 +25,13 @@ export function FixedEvents() {
     const problem = validate()
     setError(problem)
     if (problem) return
-    await addFixedEvent({ title: title.trim(), date: today, start, end })
+    await addFixedEvent({ title: title.trim(), start, end })
     setTitle('')
   }
 
   return (
     <section className="space-y-2">
-      <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Fixed events today</h3>
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Fixed events {date === today ? 'today' : 'this day'}</h3>
       {sorted.length > 0 && (
         <ul className="space-y-1">
           {sorted.map((ev) => (
@@ -39,6 +40,7 @@ export function FixedEvents() {
                 {ev.start}–{ev.end}
               </span>
               <span className="flex-1 truncate">{ev.title}</span>
+              {!readOnly && (
               <button
                 className="text-xs text-red-600 opacity-0 group-hover:opacity-100 max-sm:opacity-100"
                 onClick={() => deleteFixedEvent(ev.id)}
@@ -46,10 +48,12 @@ export function FixedEvents() {
               >
                 ✕
               </button>
+              )}
             </li>
           ))}
         </ul>
       )}
+      {!readOnly && (
       <form onSubmit={submit} className="flex flex-wrap items-center gap-2">
         <Input
           className="min-w-[8rem] flex-1"
@@ -64,6 +68,7 @@ export function FixedEvents() {
         <Input type="time" value={end} onChange={(e) => setEnd(e.target.value)} aria-label="End time" />
         <Button type="submit">Add</Button>
       </form>
+      )}
       {error && <p className="text-xs text-red-600">{error}</p>}
     </section>
   )

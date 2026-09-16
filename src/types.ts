@@ -1,9 +1,11 @@
 export type Priority = 1 | 2 | 3 | 4 // 1 = highest
 
-export type TaskStatus = 'todo' | 'in_progress' | 'done' | 'deferred'
+export type TaskStatus = 'todo' | 'in_progress' | 'done'
 
 export interface Task {
   id: string
+  /** The day this task belongs to (YYYY-MM-DD). Moving a task changes this. */
+  date: string
   title: string
   estimateMin: number
   /** Minutes added via "+N" during the day; kept separate so the estimate stays honest. */
@@ -18,8 +20,6 @@ export interface Task {
   remainingMin?: number
   /** ISO datetime. Task blocks that started before this are already folded into remainingMin. */
   remainingAsOf?: string
-  /** For status 'deferred': the day the task rejoins the queue. */
-  scheduledFor?: string // YYYY-MM-DD
 }
 
 /** Meetings, lunch, etc. The planner schedules around these. */

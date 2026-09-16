@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { addDays, format } from 'date-fns'
+import { addDays, format, parseISO } from 'date-fns'
 import { remainingFor } from '../../planner/budget'
 import { useStore } from '../../store/useStore'
 import type { Task } from '../../types'
@@ -14,17 +14,19 @@ export type StatusDialogMode = 'partial' | 'move'
  * and the Focus view.
  */
 export function StatusDialog({ task, mode, onClose }: { task: Task; mode: StatusDialogMode; onClose: () => void }) {
-  const { today, blocks, now, markPartial, moveTask } = useStore()
-  const tomorrow = format(addDays(new Date(today), 1), 'yyyy-MM-dd')
+  const { today, date, blocks, now, markPartial, moveTask } = useStore()
+  const tomorrow = format(addDays(parseISO(today), 1), 'yyyy-MM-dd')
+  // Moving to today makes sense unless the task already lives on today.
+  const canPickToday = mode === 'partial' || task.date !== today
   // Only work done so far counts toward the prefill: blocks that have started,
   // with a running one credited only up to now.
   const nowMin = dateToMin(now)
   const started = blocks
     .filter((b) => toMin(b.start) <= nowMin)
     .map((b) => (toMin(b.end) > nowMin ? { ...b, end: toHHMM(nowMin) } : b))
-  const prefill = Math.max(0, remainingFor(task, started, today))
+  const prefill = Math.max(0, remainingFor(task, started, date))
   const [minutes, setMinutes] = useState(String(prefill))
-  const [when, setWhen] = useState<string>(mode === 'partial' ? today : tomorrow)
+  const [when, setWhen] = useState<string>(canPickToday && date === today ? today : date > today ? date : tomorrow)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -32,8 +34,8 @@ export function StatusDialog({ task, mode, onClose }: { task: Task; mode: Status
     const mins = Number(minutes)
     if (mode === 'partial' && (!Number.isFinite(mins) || mins <= 0)) return setError('Enter how many minutes are left.')
     if (!/^\d{4}-\d{2}-\d{2}$/.test(when)) return setError('Pick a date.')
-    if (mode === 'move' && when <= today) return setError('Pick a day after today (or bring it back instead).')
     if (when < today) return setError('That date is in the past.')
+    if (mode === 'move' && when === task.date) return setError('The task is already on that day.')
     setBusy(true)
     try {
       if (mode === 'partial') await markPartial(task.id, Math.round(mins), when)
@@ -81,11 +83,11 @@ export function StatusDialog({ task, mode, onClose }: { task: Task; mode: Status
         <div className="space-y-2 text-sm">
           <span>{mode === 'partial' ? 'Continue on' : 'Move to'}</span>
           <div className="flex flex-wrap items-center gap-2">
-            {mode === 'partial' && <Chip value={today} label="Today" selected={when} onPick={setWhen} />}
+            {canPickToday && <Chip value={today} label="Today" selected={when} onPick={setWhen} />}
             <Chip value={tomorrow} label="Tomorrow" selected={when} onPick={setWhen} />
             <Input
               type="date"
-              min={mode === 'partial' ? today : tomorrow}
+              min={today}
               value={when}
               onChange={(e) => {
                 setWhen(e.target.value)

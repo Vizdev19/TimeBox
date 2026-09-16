@@ -5,6 +5,8 @@ import { Button, Input, Select } from '../ui'
 
 export function TaskForm({ autoFocus = false }: { autoFocus?: boolean }) {
   const addTask = useStore((s) => s.addTask)
+  const date = useStore((s) => s.date)
+  const today = useStore((s) => s.today)
   const [title, setTitle] = useState('')
   const [estimate, setEstimate] = useState('30')
   const [priority, setPriority] = useState<Priority>(3)
@@ -54,6 +56,7 @@ export function TaskForm({ autoFocus = false }: { autoFocus?: boolean }) {
       <Button type="submit" variant="primary">
         Add
       </Button>
+      {date !== today && <span className="basis-full text-xs text-zinc-500">Adding to {date}</span>}
     </form>
   )
 }

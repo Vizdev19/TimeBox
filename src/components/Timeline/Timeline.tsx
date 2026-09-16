@@ -19,7 +19,9 @@ interface Drag {
 }
 
 export function Timeline() {
-  const { blocks, tasks, fixedEvents, settings, now, moveBlock, unlockAll } = useStore()
+  const { blocks, tasks, fixedEvents, settings, now, date, today, moveBlock, unlockAll } = useStore()
+  const isToday = date === today
+  const readOnly = date < today
   const [drag, setDrag] = useState<Drag | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -33,12 +35,12 @@ export function Timeline() {
       s = Math.min(s, toMin(b.start))
       e = Math.max(e, toMin(b.end))
     }
-    if (nowMin >= s - 60 && nowMin <= e + 60) {
+    if (isToday && nowMin >= s - 60 && nowMin <= e + 60) {
       s = Math.min(s, nowMin)
       e = Math.max(e, nowMin)
     }
     return { rangeStart: Math.floor(s / 60) * 60, rangeEnd: Math.ceil(e / 60) * 60 }
-  }, [blocks, settings, nowMin])
+  }, [blocks, settings, nowMin, isToday])
 
   const height = (rangeEnd - rangeStart) * PX_PER_MIN
   const y = (min: number) => (min - rangeStart) * PX_PER_MIN
@@ -49,7 +51,7 @@ export function Timeline() {
   }, [rangeStart, rangeEnd])
 
   const onPointerDown = (e: PointerEvent, b: Block, mode: Drag['mode']) => {
-    if (b.kind !== 'task') return
+    if (b.kind !== 'task' || readOnly) return
     e.preventDefault()
     e.stopPropagation()
     ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
@@ -87,15 +89,15 @@ export function Timeline() {
   }
 
   const anyLocked = blocks.some((b) => b.locked)
-  const showNow = nowMin >= rangeStart && nowMin <= rangeEnd
+  const showNow = isToday && nowMin >= rangeStart && nowMin <= rangeEnd
 
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
         <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Timeline</h3>
         <div className="flex items-center gap-3 text-xs text-zinc-500">
-          <span className="hidden sm:inline">Drag to move · drag bottom edge to resize</span>
-          {anyLocked && (
+          {!readOnly && <span className="hidden sm:inline">Drag to move · drag bottom edge to resize</span>}
+          {anyLocked && !readOnly && (
             <button className="underline hover:text-zinc-800" onClick={() => unlockAll()}>
               Unlock all
             </button>
@@ -129,7 +131,7 @@ export function Timeline() {
           const end = isDragging ? drag.end : toMin(b.end)
           const task = taskById(tasks, b.taskId)
           const fixed = b.fixedEventId ? fixedEvents.find((f) => f.id === b.fixedEventId) : undefined
-          const past = end <= nowMin
+          const past = isToday ? end <= nowMin : readOnly
           const isActive = active?.id === b.id
           const inProgress = task?.status === 'in_progress'
           const label =
@@ -138,7 +140,7 @@ export function Timeline() {
 
           let cls = 'absolute left-12 right-2 rounded-md border text-xs overflow-hidden '
           if (b.kind === 'task') {
-            cls += `cursor-grab bg-white ${isActive ? 'border-zinc-800 shadow-md' : 'border-zinc-300 shadow-sm'} ${inProgress ? 'ring-2 ring-emerald-400' : ''}`
+            cls += `${readOnly ? '' : 'cursor-grab'} bg-white ${isActive ? 'border-zinc-800 shadow-md' : 'border-zinc-300 shadow-sm'} ${inProgress ? 'ring-2 ring-emerald-400' : ''}`
           } else if (b.kind === 'fixed') {
             cls += 'border-zinc-300 bg-zinc-100 text-zinc-600 [background-image:repeating-linear-gradient(135deg,transparent_0_6px,rgba(0,0,0,0.04)_6px_12px)]'
           } else {

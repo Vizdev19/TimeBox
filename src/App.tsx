@@ -7,7 +7,7 @@ import { Review } from './components/Review/Review'
 import { useStore } from './store/useStore'
 
 export default function App() {
-  const { loaded, load, tick, view, setView } = useStore()
+  const { loaded, load, tick, view, setView, shiftDate, setDate } = useStore()
 
   useEffect(() => {
     void load()
@@ -15,7 +15,7 @@ export default function App() {
     return () => clearInterval(id)
   }, [load, tick])
 
-  // Global shortcuts: 1/2/3 switch views, n focuses the new-task field.
+  // Global shortcuts: 1/2/3 switch views, [ ] t navigate days, n focuses the new-task field.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement)?.tagName
@@ -23,6 +23,9 @@ export default function App() {
       if (e.key === '1') setView('plan')
       else if (e.key === '2') setView('focus')
       else if (e.key === '3') setView('review')
+      else if (e.key === '[') void shiftDate(-1)
+      else if (e.key === ']') void shiftDate(1)
+      else if (e.key === 't') void setDate(useStore.getState().today)
       else if (e.key === 'n') {
         setView('plan')
         requestAnimationFrame(() => document.getElementById('new-task-title')?.focus())
@@ -31,7 +34,7 @@ export default function App() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [setView])
+  }, [setView, shiftDate, setDate])
 
   if (!loaded) return <div className="p-8 text-sm text-zinc-500">Loading…</div>
 

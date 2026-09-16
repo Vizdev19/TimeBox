@@ -30,7 +30,7 @@ describe('replanFromNow', () => {
       existingBlocks: existing,
       tasks: [
         task({ id: 'a', estimateMin: 60, status: 'done' }),
-        task({ id: 'b', estimateMin: 60, status: 'deferred' }),
+        task({ id: 'b', estimateMin: 60, status: 'done' }),
         task({ id: 'c', estimateMin: 50 }),
       ],
     })

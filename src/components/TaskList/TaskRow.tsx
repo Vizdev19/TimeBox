@@ -11,11 +11,11 @@ const statusLabel: Record<Task['status'], string> = {
   todo: 'To do',
   in_progress: 'In progress',
   done: 'Completed',
-  deferred: 'Moved',
 }
 
 export function TaskRow({ task, unscheduledMin }: { task: Task; unscheduledMin?: number }) {
-  const { updateTask, deleteTask, completeTask, bringBack, today } = useStore()
+  const { updateTask, deleteTask, completeTask, reopenTask, today, date } = useStore()
+  const readOnly = date < today
   const [editing, setEditing] = useState(false)
   const [dialog, setDialog] = useState<StatusDialogMode | null>(null)
   const [title, setTitle] = useState(task.title)
@@ -25,7 +25,7 @@ export function TaskRow({ task, unscheduledMin }: { task: Task; unscheduledMin?:
 
   const overdue = task.dueDate && task.dueDate < today && task.status !== 'done'
   const dueToday = task.dueDate === today && task.status !== 'done'
-  const inactive = task.status === 'done' || task.status === 'deferred'
+  const inactive = task.status === 'done'
   const partial = task.remainingMin !== undefined && task.status !== 'done'
 
   const save = async () => {
@@ -37,13 +37,12 @@ export function TaskRow({ task, unscheduledMin }: { task: Task; unscheduledMin?:
 
   const onStatus = async (choice: StatusChoice) => {
     if (choice === 'done') await completeTask(task.id)
-    else if (choice === 'todo') await bringBack(task.id)
+    else if (choice === 'todo') await reopenTask(task.id)
     else setDialog(choice)
   }
 
   // The select shows the current status; the "…" choices open a dialog.
-  const selectValue: StatusChoice | 'in_progress' | 'deferred' =
-    task.status === 'done' ? 'done' : task.status === 'deferred' ? 'deferred' : task.status === 'in_progress' ? 'in_progress' : 'todo'
+  const selectValue: StatusChoice | 'in_progress' = task.status === 'done' ? 'done' : task.status === 'in_progress' ? 'in_progress' : 'todo'
 
   if (editing) {
     return (
@@ -96,7 +95,6 @@ export function TaskRow({ task, unscheduledMin }: { task: Task; unscheduledMin?:
               due {task.dueDate}
             </span>
           )}
-          {task.status === 'deferred' && task.scheduledFor && <span className="font-medium text-zinc-700">→ {task.scheduledFor}</span>}
           {unscheduledMin !== undefined && (
             <span className="font-medium text-amber-700" title="Won't fit in today's remaining time">
               {unscheduledMin >= (task.remainingMin ?? task.estimateMin) ? "won't fit today" : `${formatMinutes(unscheduledMin)} won't fit`}
@@ -107,6 +105,7 @@ export function TaskRow({ task, unscheduledMin }: { task: Task; unscheduledMin?:
       <div className="flex shrink-0 items-center gap-1">
         <Select
           className="py-1 text-xs"
+          disabled={readOnly}
           value={selectValue}
           aria-label={`Status of ${task.title}`}
           onChange={(e) => {
@@ -120,18 +119,13 @@ export function TaskRow({ task, unscheduledMin }: { task: Task; unscheduledMin?:
               {statusLabel.in_progress}
             </option>
           )}
-          {task.status === 'deferred' && (
-            <option value="deferred" disabled>
-              {statusLabel.deferred} → {task.scheduledFor}
-            </option>
-          )}
-          <option value="todo">{task.status === 'done' || task.status === 'deferred' ? 'Back to To do' : 'To do'}</option>
+          <option value="todo">{task.status === 'done' ? 'Back to To do' : 'To do'}</option>
           <option value="done">Completed</option>
           <option value="partial">Partially completed…</option>
-          <option value="move">{task.status === 'deferred' ? 'Change date…' : 'Moved to another date…'}</option>
+          <option value="move">Moved to another date…</option>
         </Select>
         <div className="flex gap-1 opacity-0 transition group-hover:opacity-100 focus-within:opacity-100 max-sm:opacity-100">
-          {!inactive && (
+          {!inactive && !readOnly && (
             <Button variant="ghost" className="px-2 py-1 text-xs" onClick={() => setEditing(true)}>
               Edit
             </Button>

@@ -10,6 +10,7 @@ export const resetIds = () => {
 
 export function task(over: Partial<Task> & { id: string; estimateMin: number }): Task {
   return {
+    date: DAY,
     title: over.id,
     priority: 3,
     status: 'todo',

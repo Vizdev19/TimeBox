@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { format, parseISO, subDays } from 'date-fns'
 import { taskById, useStore } from '../../store/useStore'
 import type { SessionLog } from '../../types'
 import { formatMinutes, toMin } from '../../utils/time'
@@ -45,9 +46,7 @@ export function Review() {
 
   // Estimate accuracy over the last 14 days of finished work.
   const accuracy = useMemo(() => {
-    const cutoff = new Date(today)
-    cutoff.setDate(cutoff.getDate() - 14)
-    const c = cutoff.toISOString().slice(0, 10)
+    const c = format(subDays(parseISO(today), 14), 'yyyy-MM-dd')
     let p = 0
     let a = 0
     let n = 0

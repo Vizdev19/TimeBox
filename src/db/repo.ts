@@ -11,6 +11,24 @@ import {
 export const repo = {
   // ---- tasks
   allTasks: () => db.tasks.orderBy('createdAt').toArray(),
+  /** Tasks on a day, plus any task referenced by that day's blocks (so old timelines stay labelled). */
+  tasksOn: async (date: string): Promise<Task[]> => {
+    const own = await db.tasks.where('date').equals(date).sortBy('createdAt')
+    const ids = new Set(own.map((t) => t.id))
+    const refs = (await db.blocks.where('date').equals(date).toArray())
+      .map((b) => b.taskId)
+      .filter((id): id is string => !!id && !ids.has(id))
+    const extra = (await db.tasks.bulkGet([...new Set(refs)])).filter((t): t is Task => !!t)
+    return [...own, ...extra]
+  },
+  /** Unfinished tasks from days before `today`. */
+  leftoversBefore: (today: string) =>
+    db.tasks
+      .where('status')
+      .anyOf('todo', 'in_progress')
+      .filter((t) => t.date < today)
+      .sortBy('date'),
+  blocksForTask: (taskId: string) => db.blocks.where('taskId').equals(taskId).toArray(),
   putTask: (t: Task) => db.tasks.put(t),
   deleteTask: async (id: string) => {
     await db.transaction('rw', db.tasks, db.blocks, async () => {
